@@ -147,21 +147,32 @@ module.exports = CachingWriter.extend({
     Begins importing at an entry point and adds a single bundled
     module to the output tree.
   */
-  _updateBundle: function(inDir, outDir){
-    var name = this.bundleOptions.name;
-    var opts = this._generateEsperantoOptions(name);
-    var transpilerName = formatToFunctionName[this.format];
+    _updateBundle: function(inDir, outDir) {
+        var name = this.bundleOptions.name;
+        var opts = this._generateEsperantoOptions(name);
+        var root = this.sourceMapSourcesRoot;
 
-    return esperanto.bundle({
-      base: inDir,
-      entry: this.bundleOptions.entry
-    }).then(function(bundle) {
-      var compiledModule = bundle[transpilerName](opts);
-      var fullOutputPath = path.join(outDir, name + ".js");
+        return esperanto.bundle({
+            base: inDir,
+            entry: this.bundleOptions.entry
+        }).then(function(bundle) {
+            var compiled = bundle.toAmd(opts);
+            var fullOutputPath = path.join(outDir, name + '.js');
 
-      return writeFile(fullOutputPath, compiledModule.code);
-    });
-  },
+            var writer = [writeFile(fullOutputPath, compiled.code)];
+
+            if (compiled.map !== null) {
+                var sourceMapOutputPath = path.join(outDir, opts.sourceMapFile + '.map');
+
+                if (typeof root === 'function') {
+                    compiled.map.sources = compiled.map.sources.map(root);
+                }
+                writer = writer.concat(writeFile(sourceMapOutputPath, compiled.map.toString()));
+            }
+
+            return writer;
+        });
+    },
 
   /**
     A hook called if ES6Modules is being used in a 1-to-1 per-per file mode
